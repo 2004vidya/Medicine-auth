@@ -3,7 +3,7 @@ import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import prisma from "@/lib/prisma";
-import { compare } from "bcryptjs";  // for password check
+import { compare } from "bcryptjs"; // for password check
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
@@ -11,6 +11,13 @@ export const authOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+        },
+      },
     }),
     CredentialsProvider({
       name: "Credentials",
@@ -39,14 +46,47 @@ export const authOptions = {
   session: {
     strategy: "jwt",
   },
+  pages: {
+    signIn: "/auth", // <-- this tells NextAuth to use your auth page
+  },
+  cookies: {
+    pkceCodeVerifier: {
+      name: "next-auth.pkce.code_verifier",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+  },
+  debug: process.env.NODE_ENV === "development",
   callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = user.role; // store role in token
+      }
+      return token;
+    },
     async session({ session, token }) {
       if (token?.sub) {
         session.user.id = token.sub;
+        session.user.role = token.role; // expose role to session
       }
       return session;
     },
+    async redirect({ url, baseUrl }) {
+      // Allow relative URLs
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      // Allow same-origin URLs
+      if (url.startsWith(baseUrl)) return url;
+      // Default redirect
+      return baseUrl;
+    },
   },
+
+  // 👇 This allows linking credentials + Google for same email
+  allowDangerousEmailAccountLinking: true,
 };
 
 const handler = NextAuth(authOptions);

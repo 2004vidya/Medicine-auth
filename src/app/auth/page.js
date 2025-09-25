@@ -1,7 +1,8 @@
 "use client"; // 👈 Needed because we're using hooks + NextAuth client
 
 import { useState, useEffect, useRef } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 const ParticleBackground = () => {
   const canvasRef = useRef(null);
@@ -76,8 +77,22 @@ const ParticleBackground = () => {
 const AuthForm = ({ type, role, setRole, onToggleType }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const { data: session } = useSession();
+  const router = useRouter();
 
   const isLogin = type === "login";
+
+  // Redirect based on role when session is available
+  useEffect(() => {
+    if (session?.user?.role) {
+      const userRole = session.user.role;
+      if (userRole === "MANUFACTURER") {
+        router.push("/manufacturer/dashboard");
+      } else if (userRole === "CUSTOMER") {
+        router.push("/customer/dashboard");
+      }
+    }
+  }, [session, router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -85,18 +100,21 @@ const AuthForm = ({ type, role, setRole, onToggleType }) => {
     if (isLogin) {
       // 🔑 Login with credentials
       const res = await signIn("credentials", {
-        redirect: true,
+        redirect: false, // Handle redirect manually
         email,
         password,
-        callbackUrl: "/", // redirect after login
       });
-      console.log("Login result:", res);
+
+      if (res?.error) {
+        alert(res.error);
+      }
+      // Redirect will be handled by useEffect when session updates
     } else {
       // 🔑 Signup API (custom endpoint to register user in DB)
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role }),
+        body: JSON.stringify({ email, password, role: role.toUpperCase() }),
       });
 
       if (res.ok) {
@@ -110,7 +128,8 @@ const AuthForm = ({ type, role, setRole, onToggleType }) => {
   };
 
   const handleGoogleLogin = async () => {
-    await signIn("google", { callbackUrl: "/" });
+    await signIn("google", { redirect: false });
+    // Redirect will be handled by useEffect when session updates
   };
 
   return (
@@ -118,9 +137,9 @@ const AuthForm = ({ type, role, setRole, onToggleType }) => {
       <div className="flex justify-center space-x-4">
         <button
           type="button"
-          onClick={() => setRole("customer")}
+          onClick={() => setRole("CUSTOMER")}
           className={`py-2 px-4 rounded-full transition-colors duration-300 ${
-            role === "customer"
+            role === "CUSTOMER"
               ? "bg-orange-500 text-white"
               : "bg-[#1a1a1a] text-gray-300 hover:bg-[#333333]"
           }`}
@@ -129,9 +148,9 @@ const AuthForm = ({ type, role, setRole, onToggleType }) => {
         </button>
         <button
           type="button"
-          onClick={() => setRole("manufacturer")}
+          onClick={() => setRole("MANUFACTURER")}
           className={`py-2 px-4 rounded-full transition-colors duration-300 ${
-            role === "manufacturer"
+            role === "MANUFACTURER"
               ? "bg-orange-500 text-white"
               : "bg-[#1a1a1a] text-gray-300 hover:bg-[#333333]"
           }`}
@@ -154,7 +173,7 @@ const AuthForm = ({ type, role, setRole, onToggleType }) => {
           onChange={(e) => setEmail(e.target.value)}
           className="w-full px-4 py-2 bg-[#1a1a1a] text-white rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
           placeholder={`${
-            role === "customer" ? "customer" : "manager"
+            role === "CUSTOMER" ? "customer" : "manager"
           }@zoiq.io`}
           required
         />
@@ -224,7 +243,7 @@ const AuthForm = ({ type, role, setRole, onToggleType }) => {
 
 export default function Home() {
   const [authType, setAuthType] = useState("login"); // 'login' or 'signup'
-  const [role, setRole] = useState("customer"); // 'customer' or 'manufacturer'
+  const [role, setRole] = useState("CUSTOMER"); // 'CUSTOMER' or 'MANUFACTURER'
 
   const handleToggleType = () => {
     setAuthType(authType === "login" ? "signup" : "login");
