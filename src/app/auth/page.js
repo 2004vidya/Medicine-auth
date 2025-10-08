@@ -107,8 +107,10 @@ const AuthForm = ({ type, role, setRole, onToggleType }) => {
 
       if (res?.error) {
         alert(res.error);
+      } else if (res?.ok) {
+        // Force a session refresh and redirect
+        window.location.href = role === "MANUFACTURER" ? "/manufacturer/dashboard" : "/customer/dashboard";
       }
-      // Redirect will be handled by useEffect when session updates
     } else {
       // 🔑 Signup API (custom endpoint to register user in DB)
       const res = await fetch("/api/auth/register", {
@@ -128,8 +130,20 @@ const AuthForm = ({ type, role, setRole, onToggleType }) => {
   };
 
   const handleGoogleLogin = async () => {
-    await signIn("google", { redirect: false });
-    // Redirect will be handled by useEffect when session updates
+    // Set the pending role in a cookie that the server can read during OAuth callback
+    await fetch("/api/auth/set-pending-role", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: role.toUpperCase() }),
+    });
+
+    // Small delay to ensure cookie is set
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Now proceed with Google sign-in
+    await signIn("google", {
+      callbackUrl: role === "MANUFACTURER" ? "/manufacturer/dashboard" : "/customer/dashboard"
+    });
   };
 
   return (

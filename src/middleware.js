@@ -5,8 +5,15 @@ export default withAuth(
     const { pathname } = req.nextUrl;
     const token = req.nextauth.token;
 
+    // Debug logging in development
+    if (process.env.NODE_ENV === "development") {
+      console.log("Middleware - Path:", pathname);
+      console.log("Middleware - Token exists:", !!token);
+      console.log("Middleware - User role:", token?.role);
+    }
+
     // If user is authenticated but trying to access auth page, redirect to appropriate dashboard
-    if (pathname === "/auth" && token) {
+    if (pathname === "/auth" && token && token.role) {
       const role = token.role;
       if (role === "MANUFACTURER") {
         return Response.redirect(new URL("/manufacturer/dashboard", req.url));
@@ -16,12 +23,16 @@ export default withAuth(
     }
 
     // Check role-based access for protected routes
-    if (pathname.startsWith("/manufacturer") && token?.role !== "MANUFACTURER") {
-      return Response.redirect(new URL("/auth", req.url));
+    if (pathname.startsWith("/manufacturer")) {
+      if (!token || token.role !== "MANUFACTURER") {
+        return Response.redirect(new URL("/auth", req.url));
+      }
     }
 
-    if (pathname.startsWith("/customer") && token?.role !== "CUSTOMER") {
-      return Response.redirect(new URL("/auth", req.url));
+    if (pathname.startsWith("/customer")) {
+      if (!token || token.role !== "CUSTOMER") {
+        return Response.redirect(new URL("/auth", req.url));
+      }
     }
   },
   {
