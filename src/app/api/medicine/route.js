@@ -29,11 +29,10 @@ export async function POST(req) {
         batchNumber: batchNo,
         expiryDate: new Date(expiry),
         qrCode: qrCodeUrl, // Save the QR code URL
+        ingredients,
+        dosageForm,
+        strength,
         manufacturerId: session.user.id, // Connect to the current user
-        // Temporarily comment out the new fields until Prisma client is regenerated
-        // ingredients,
-        // dosageForm,
-        // strength,
       },
     });
 
