@@ -28,16 +28,19 @@ export async function GET(req) {
     const prompt = `
       Provide medicine details for "${name}" in strict JSON format only.
       If it's not a real medicine or you're not sure, respond with: {"exists": false}
-      
+
       If it exists, provide:
       {
         "exists": true,
         "name": "Official medicine name",
         "ingredients": "Active ingredients (comma separated)",
         "dosageForm": "Tablet/Syrup/Capsule/Lozenges/etc",
-        "strength": "Dosage strength (e.g., 500mg, 10ml)"
+        "strength": "Dosage strength (e.g., 500mg, 10ml)",
+        "diseases": ["disease1", "disease2", "symptom1"]
       }
-      
+
+      The diseases array should contain common diseases, symptoms, or conditions this medicine treats (e.g., ["fever", "cold", "headache"]).
+
       Medicine: ${name}
     `;
 
@@ -62,17 +65,19 @@ export async function GET(req) {
         ingredients: "",
         dosageForm: "",
         strength: "",
+        diseases: "",
         message: "Medicine not found. Please enter details manually."
       });
     }
 
     console.log("✅ Autofilled:", parsed);
-    
+
     // Return the autofilled data
     return NextResponse.json({
       ingredients: parsed.ingredients || "",
       dosageForm: parsed.dosageForm || "",
       strength: parsed.strength || "",
+      diseases: Array.isArray(parsed.diseases) ? parsed.diseases.join(", ") : "",
     });
   } catch (error) {
     console.error("Gemini API Error:", error);

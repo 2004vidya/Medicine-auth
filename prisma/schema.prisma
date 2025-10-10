@@ -17,12 +17,34 @@ model User {
   id        String     @id @default(uuid())
   name      String?
   email     String?    @unique
+  emailVerified DateTime?
+  image     String?
   password  String?
   role      Role       @default(CUSTOMER)
   medicines Medicine[] @relation("UserMedicines") // 👈 opposite relation
+  accounts  Account[]
+  sessions  Session[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
-  Session   Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
 }
 
 model MedicineMaster {
@@ -51,6 +73,7 @@ model Medicine {
   manufacturerId String
   master         MedicineMaster? @relation("MasterMedicines", fields: [masterId], references: [id])
   masterId       String?
+  diseases       String[]   // ✅ NEW: store multiple related diseases or symptoms
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
@@ -65,8 +88,7 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {

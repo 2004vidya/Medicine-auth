@@ -1,132 +1,226 @@
 import { NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import prisma from "@/lib/prisma";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 export async function GET(req) {
-  const { searchParams } = new URL(req.url);
-  const name = searchParams.get("name");
-
-  if (!name) {
-    return NextResponse.json({ error: "Medicine name is required" }, { status: 400 });
-  }
-
   try {
-    console.log("🔍 Searching for medicine:", name);
+    const { searchParams } = new URL(req.url);
+    const name = searchParams.get("name")?.trim();
 
-    // STEP 1: Check the database first for exact or partial match
-    const dbMedicine = await prisma.medicine.findFirst({
+    if (!name) {
+      return NextResponse.json({ error: "Query missing" }, { status: 400 });
+    }
+
+    const query = name.toLowerCase();
+    console.log("🔍 Searching for medicine or disease:", query);
+
+    // ✅ STEP 1: Try to match a medicine by name or batch number (case-insensitive)
+    const medicineMatches = await prisma.medicine.findMany({
       where: {
         OR: [
-          { name: { contains: name, mode: 'insensitive' } },
-          { batchNumber: { contains: name, mode: 'insensitive' } },
+          { name: { contains: query, mode: "insensitive" } },
+          { batchNumber: { contains: query, mode: "insensitive" } },
         ],
       },
       include: {
         manufacturer: {
-          select: {
-            name: true,
-            email: true,
-          },
+          select: { name: true, email: true },
         },
       },
     });
 
-    if (dbMedicine) {
-      // Found in database - return as authentic
-      console.log("✅ Found in database:", dbMedicine.name);
+    if (medicineMatches.length > 0) {
+      console.log("✅ Medicine match found:", medicineMatches[0].name);
       return NextResponse.json({
         authentic: true,
-        details: {
-          name: dbMedicine.name,
-          batchNumber: dbMedicine.batchNumber,
-          expiryDate: dbMedicine.expiryDate.toISOString().split('T')[0],
-          ingredients: dbMedicine.ingredients || "Not specified",
-          dosageForm: dbMedicine.dosageForm || "Not specified",
-          strength: dbMedicine.strength || "Not specified",
-          manufacturer: dbMedicine.manufacturer?.name || dbMedicine.manufacturer?.email || "Unknown",
-          qrCode: dbMedicine.qrCode,
-        },
+        type: "medicine",
+        details: medicineMatches[0],
       });
     }
 
-    console.log("❌ Not found in database, checking with Gemini...");
+    // ✅ STEP 2: Search for all medicines related to this disease name
+    const allMedicines = await prisma.medicine.findMany({
+      include: {
+        manufacturer: { select: { name: true, email: true } },
+      },
+    });
 
-    // STEP 2: If not found in database, try Gemini API for general medicine info
-    if (!process.env.GEMINI_API_KEY) {
-      console.error("GEMINI_API_KEY is not configured");
+    const diseaseMatches = allMedicines.filter((med) =>
+      med.diseases?.some(
+        (disease) => disease.toLowerCase().includes(query)
+      )
+    );
+
+    if (diseaseMatches.length > 0) {
+      console.log(
+        `🦠 Found ${diseaseMatches.length} medicines related to disease:`,
+        query
+      );
       return NextResponse.json({
         authentic: false,
-        details: null,
-        error: "Medicine not found in database and Gemini API is not configured"
+        type: "disease",
+        medicines: diseaseMatches,
       });
     }
 
-    // Use Gemini 2.5 Flash - the latest fast model
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-    const prompt = `
-      Check if "${name}" is a real medicine. If it is, provide details in strict JSON format.
-      If it's not a real medicine or you're not sure, respond with: {"exists": false}
-
-      If it exists, provide:
-      {
-        "exists": true,
-        "name": "Official medicine name",
-        "ingredients": "Active ingredients",
-        "dosageForm": "Tablet/Syrup/etc",
-        "strength": "Dosage strength"
-      }
-
-      Medicine to check: ${name}
-    `;
-
-    const result = await model.generateContent(prompt);
-    const rawText = result.response.text();
-
-    let parsed;
-    try {
-      parsed = JSON.parse(rawText);
-    } catch {
-      // fallback in case Gemini returns extra text
-      const match = rawText.match(/\{[\s\S]*\}/);
-      parsed = match ? JSON.parse(match[0]) : { exists: false };
-    }
-
-    // If Gemini says it doesn't exist or we couldn't parse, return not found
-    if (!parsed.exists) {
-      return NextResponse.json({
-        authentic: false,
-        details: null,
-        message: "Medicine not found in our database. This might be a fake or unregistered medicine."
-      });
-    }
-
-    // Return Gemini data but mark as not authenticated (not in our database)
+    // ✅ STEP 3: Nothing found
+    console.log("❌ No matches found for:", query);
     return NextResponse.json({
       authentic: false,
-      details: {
-        name: parsed.name || name,
-        ingredients: parsed.ingredients || "Unknown",
-        dosageForm: parsed.dosageForm || "Unknown",
-        strength: parsed.strength || "Unknown",
-        manufacturer: "Not registered in our system",
-      },
-      message: "This medicine exists but is not registered in our database. Please verify with the manufacturer."
+      message: "No medicines found for this query.",
     });
   } catch (error) {
-    console.error("Gemini API Error:", error);
-
-    // Provide more detailed error message
-    let errorMessage = "Failed to fetch medicine details";
-    if (error.message) {
-      errorMessage += `: ${error.message}`;
-    }
-
-    return NextResponse.json({
-      error: errorMessage,
-      details: error.status ? `Status: ${error.status}` : undefined
-    }, { status: 500 });
+    console.error("❌ Lookup API Error:", error);
+    return NextResponse.json(
+      { error: "Internal server error", details: error.message },
+      { status: 500 }
+    );
   }
 }
+
+// import { NextResponse } from "next/server";
+// import { GoogleGenerativeAI } from "@google/generative-ai";
+// import prisma from "@/lib/prisma";
+
+// const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// export async function GET(req) {
+//   const { searchParams } = new URL(req.url);
+//   const name = searchParams.get("name");
+
+//   if (!name) {
+//     return NextResponse.json({ error: "Medicine name or disease is required" }, { status: 400 });
+//   }
+
+//   try {
+//     console.log("🔍 Searching for medicine or disease:", name);
+
+//     // STEP 1: Try searching in Prisma by medicine name, batch number, or disease keyword
+//     const dbMedicines = await prisma.medicine.findMany({
+//       where: {
+//         OR: [
+//           { name: { contains: name, mode: "insensitive" } },
+//           { batchNumber: { contains: name, mode: "insensitive" } },
+//           { diseases: { hasSome: [name.toLowerCase()] } }, // ✅ search by disease/symptom array
+//         ],
+//       },
+//       include: {
+//         manufacturer: {
+//           select: {
+//             name: true,
+//             email: true,
+//           },
+//         },
+//       },
+//     });
+
+//     if (dbMedicines.length > 0) {
+//       console.log(`✅ Found ${dbMedicines.length} medicine(s) in database`);
+//       return NextResponse.json({
+//         authentic: true,
+//         count: dbMedicines.length,
+//         details: dbMedicines.map((m) => ({
+//           name: m.name,
+//           batchNumber: m.batchNumber,
+//           expiryDate: m.expiryDate.toISOString().split("T")[0],
+//           ingredients: m.ingredients || "Not specified",
+//           dosageForm: m.dosageForm || "Not specified",
+//           strength: m.strength || "Not specified",
+//           diseases: m.diseases || [],
+//           manufacturer: m.manufacturer?.name || m.manufacturer?.email || "Unknown",
+//           qrCode: m.qrCode,
+//         })),
+//       });
+//     }
+
+//     console.log("❌ Not found in database, checking with Gemini...");
+
+//     // STEP 2: If not found in DB, try Gemini for public medicine info
+//     if (!process.env.GEMINI_API_KEY) {
+//       return NextResponse.json({
+//         authentic: false,
+//         error: "Medicine not found in database and Gemini API not configured",
+//       });
+//     }
+
+//     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+//     const prompt = `
+//       Determine if "${name}" is a real medicine or a disease.
+//       If it's a medicine, return JSON:
+//       {
+//         "exists": true,
+//         "type": "medicine",
+//         "name": "Official medicine name",
+//         "ingredients": "Active ingredients",
+//         "dosageForm": "Tablet/Syrup/etc",
+//         "strength": "Dosage strength"
+//       }
+
+//       If it's a disease or symptom, return JSON:
+//       {
+//         "exists": true,
+//         "type": "disease",
+//         "relatedMedicines": ["medicine1", "medicine2", ...]
+//       }
+
+//       If it's fake or unknown, return:
+//       { "exists": false }
+
+//       Search term: ${name}
+//     `;
+
+//     const result = await model.generateContent(prompt);
+//     const rawText = result.response.text();
+
+//     let parsed;
+//     try {
+//       parsed = JSON.parse(rawText);
+//     } catch {
+//       const match = rawText.match(/\{[\s\S]*\}/);
+//       parsed = match ? JSON.parse(match[0]) : { exists: false };
+//     }
+
+//     if (!parsed.exists) {
+//       return NextResponse.json({
+//         authentic: false,
+//         message: `No record found for "${name}". This might be fake or unregistered.`,
+//       });
+//     }
+
+//     // STEP 3: Handle Gemini response intelligently
+//     if (parsed.type === "disease") {
+//       return NextResponse.json({
+//         authentic: false,
+//         type: "disease",
+//         message: `Found disease "${name}" with related medicines.`,
+//         relatedMedicines: parsed.relatedMedicines || [],
+//       });
+//     }
+
+//     if (parsed.type === "medicine") {
+//       return NextResponse.json({
+//         authentic: false,
+//         message: "This medicine exists but is not registered in our database.",
+//         details: {
+//           name: parsed.name || name,
+//           ingredients: parsed.ingredients || "Unknown",
+//           dosageForm: parsed.dosageForm || "Unknown",
+//           strength: parsed.strength || "Unknown",
+//           manufacturer: "Not registered in our system",
+//         },
+//       });
+//     }
+
+//     // fallback
+//     return NextResponse.json({
+//       authentic: false,
+//       message: "Could not verify this term.",
+//     });
+
+//   } catch (error) {
+//     console.error("Lookup API Error:", error);
+//     return NextResponse.json(
+//       { error: "Internal server error", details: error.message },
+//       { status: 500 }
+//     );
+//   }
+// }

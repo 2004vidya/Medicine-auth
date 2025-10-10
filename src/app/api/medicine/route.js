@@ -18,7 +18,7 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { name, batchNo, expiry, ingredients, dosageForm, strength, id, verificationUrl } = body;
+    const { name, batchNo, expiry, ingredients, dosageForm, strength, diseases, id, verificationUrl } = body;
 
     // Generate QR code URL
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verificationUrl)}`;
@@ -32,6 +32,7 @@ export async function POST(req) {
         ingredients,
         dosageForm,
         strength,
+        diseases: diseases || [], // Store diseases array
         manufacturerId: session.user.id, // Connect to the current user
       },
     });

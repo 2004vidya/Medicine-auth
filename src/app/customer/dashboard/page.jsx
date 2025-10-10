@@ -290,7 +290,8 @@ const fetchMedicineDetails = async (query) => {
     );
     if (!res.ok) throw new Error("Failed to fetch medicine");
     const data = await res.json();
-    return data; // Expecting { authentic: boolean, details: {...} }
+    console.log("📦 Raw API Response:", data); // Debug log
+    return data;
   } catch (err) {
     console.error("Error fetching medicine:", err);
     return { authentic: false, details: null, error: true };
@@ -370,10 +371,12 @@ export default function Home() {
 
     try {
       const apiResult = await fetchMedicineDetails(currentQuery);
+      console.log("API Result:", apiResult); // Debug log
       setResult(apiResult);
 
-      if (apiResult.authentic && apiResult.details?.name) {
-        addToHistory(apiResult.details.name);
+      // Add to history if it's a valid search
+      if (apiResult.authentic || apiResult.type === "disease") {
+        addToHistory(currentQuery);
       } else {
         addToHistory(currentQuery);
       }
@@ -391,19 +394,36 @@ export default function Home() {
   const renderAuthStatus = () => {
     if (!result) return null;
 
-    {
-      result && !result.authentic && (
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => handleReportFake(query)}
-            className="bg-red-500 text-white font-semibold px-4 py-2 rounded-lg hover:bg-red-600 transition"
-          >
-            Report Fake Medicine
-          </button>
+    // Handle disease search - show info message
+    if (result.type === "disease") {
+      return (
+        <div
+          className="mt-6 p-4 rounded-lg shadow-md bg-blue-50 border-l-4 border-blue-500 text-blue-700"
+          role="alert"
+        >
+          <div className="flex items-start">
+            <div className="w-6 h-6 mr-3 mt-1 text-blue-500">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-bold text-lg text-blue-800">
+                Disease/Symptom Search
+              </p>
+              <p className="text-blue-600">
+                Showing medicines that treat <span className="font-bold">{query}</span>.
+                {result.medicines && result.medicines.length > 0
+                  ? ` Found ${result.medicines.length} medicine(s).`
+                  : " No medicines found."}
+              </p>
+            </div>
+          </div>
         </div>
       );
     }
 
+    // Handle medicine authentication
     const isAuthentic = result.authentic;
     const name = result.details?.name || query;
     const icon = isAuthentic ? <CheckCircleIcon /> : <XCircleIcon />;
@@ -453,42 +473,136 @@ export default function Home() {
   };
 
   const renderMedicineCard = () => {
-    const details = result?.details;
-    if (!details) return null;
+    if (!result) return null;
 
-    return (
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-        <div className="flex items-center justify-between mb-4 border-b pb-3">
-          <h2 className="text-2xl font-bold text-gray-800">{details.name}</h2>
-          <span className="px-3 py-1 text-sm font-medium rounded-full bg-blue-100 text-blue-800">
-            {details.strength}
-          </span>
-        </div>
+    // Handle disease search - show list of medicines
+    if (result.type === "disease" && result.medicines) {
+      return (
+        <div className="space-y-4">
+          <h3 className="text-xl font-bold text-gray-800">
+            💊 Found {result.medicines.length} medicine(s) for "{query}"
+          </h3>
+          {result.medicines.map((medicine, index) => (
+            <div
+              key={index}
+              className="bg-white p-6 rounded-xl shadow-lg border border-gray-100"
+            >
+              <div className="flex items-center justify-between mb-4 border-b pb-3">
+                <h2 className="text-2xl font-bold text-gray-800">
+                  {medicine.name}
+                </h2>
+                <span className="px-3 py-1 text-sm font-medium rounded-full bg-blue-100 text-blue-800">
+                  {medicine.strength}
+                </span>
+              </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-gray-600">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-gray-500">Batch Number</p>
-            <p className="text-base font-semibold text-gray-700">
-              {details.batchNumber}
-            </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-gray-600">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-500">
+                    Batch Number
+                  </p>
+                  <p className="text-base font-semibold text-gray-700">
+                    {medicine.batchNumber}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-500">
+                    Expiry Date
+                  </p>
+                  <p className="text-base font-semibold text-gray-700">
+                    {new Date(medicine.expiryDate).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <p className="text-sm font-medium text-gray-500">
+                    Ingredients
+                  </p>
+                  <p className="text-base">{medicine.ingredients || "Not specified"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-500">
+                    Dosage Form
+                  </p>
+                  <p className="text-base text-gray-700">
+                    {medicine.dosageForm || "Not specified"}
+                  </p>
+                </div>
+                {medicine.diseases && medicine.diseases.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-gray-500">Treats</p>
+                    <p className="text-base text-gray-700">
+                      {medicine.diseases.join(", ")}
+                    </p>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-500">
+                    Manufacturer
+                  </p>
+                  <p className="text-base text-gray-700">
+                    {medicine.manufacturer?.name || medicine.manufacturer?.email || "Unknown"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Handle single medicine object (when searching by medicine name/batch)
+    if (result.type === "medicine" && result.details) {
+      const medicine = result.details;
+      return (
+        <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+          <div className="flex items-center justify-between mb-4 border-b pb-3">
+            <h2 className="text-2xl font-bold text-gray-800">{medicine.name}</h2>
+            <span className="px-3 py-1 text-sm font-medium rounded-full bg-blue-100 text-blue-800">
+              {medicine.strength}
+            </span>
           </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-gray-500">Expiry Date</p>
-            <p className="text-base font-semibold text-gray-700">
-              {details.expiryDate}
-            </p>
-          </div>
-          <div className="space-y-1 sm:col-span-2">
-            <p className="text-sm font-medium text-gray-500">Ingredients</p>
-            <p className="text-base">{details.ingredients}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-gray-500">Dosage Form</p>
-            <p className="text-base text-gray-700">{details.dosageForm}</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-gray-600">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-gray-500">Batch Number</p>
+              <p className="text-base font-semibold text-gray-700">
+                {medicine.batchNumber}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-gray-500">Expiry Date</p>
+              <p className="text-base font-semibold text-gray-700">
+                {new Date(medicine.expiryDate).toLocaleDateString()}
+              </p>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-sm font-medium text-gray-500">Ingredients</p>
+              <p className="text-base">{medicine.ingredients || "Not specified"}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-gray-500">Dosage Form</p>
+              <p className="text-base text-gray-700">{medicine.dosageForm || "Not specified"}</p>
+            </div>
+            {medicine.diseases && medicine.diseases.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-gray-500">Treats</p>
+                <p className="text-base text-gray-700">
+                  {medicine.diseases.join(", ")}
+                </p>
+              </div>
+            )}
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-gray-500">Manufacturer</p>
+              <p className="text-base text-gray-700">
+                {medicine.manufacturer?.name || medicine.manufacturer?.email || "Unknown"}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-    );
+      );
+    }
+
+    return null;
   };
 
   const isInitialState = !result && !isLoading && !query;
@@ -550,7 +664,7 @@ export default function Home() {
             </p>
             {/* Logout Button added at top-right */}
             <button
-                onClick={() => signOut({ callbackUrl: "/auth", redirect: true })}
+              onClick={() => signOut({ callbackUrl: "/auth", redirect: true })}
               className="absolute top-0 right-0 text-sm font-medium text-red-400 hover:text-red-500 transition duration-150 px-3 py-1 rounded-full border border-red-400 hover:bg-red-900/20"
             >
               Logout
@@ -608,7 +722,7 @@ export default function Home() {
               </div>
 
               {/* Medicine Information Card */}
-              {result?.details && renderMedicineCard()}
+              {result && (result.type === "medicine" || result.type === "disease") && renderMedicineCard()}
 
               {/* Initial Message Card */}
               {isInitialState && (

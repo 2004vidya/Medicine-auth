@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 
-
 // Move ParticleBackground outside the main component to prevent re-creation
 const ParticleBackground = () => {
   const canvasRef = useRef(null);
@@ -127,11 +126,12 @@ const ManufacturerDashboard = () => {
   const [ingredients, setIngredients] = useState("");
   const [dosageForm, setDosageForm] = useState("");
   const [strength, setStrength] = useState("");
+  const [diseases, setDiseases] = useState("");
 
   const [medicines, setMedicines] = useState([]); // ✅ medicines from DB
 
   const [showForm, setShowForm] = useState(false);
-   const router = useRouter();
+  const router = useRouter();
 
   // Function to generate a UUID (auto-generated unique identifier)
   const generateUUID = () => {
@@ -150,12 +150,31 @@ const ManufacturerDashboard = () => {
     // For now just redirect to home
     signOut({
       callbackUrl: "/auth",
-      redirect: true
+      redirect: true,
+    });
+  };
+
+  const handleSubmit = async () => {
+    const res = await fetch("/api/medicine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: medicineName,
+        batchNumber,
+        expiryDate,
+        ingredients,
+        dosage,
+        diseases: diseases.split(",").map((d) => d.trim()), // ✅ store as array
+      }),
     });
   };
 
   const handleDeleteMedicine = async (medicineId) => {
-    if (!window.confirm("Are you sure you want to delete this medicine? This action cannot be undone.")) {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this medicine? This action cannot be undone."
+      )
+    ) {
       return;
     }
 
@@ -214,6 +233,7 @@ const ManufacturerDashboard = () => {
       ingredients: ingredients,
       dosageForm: dosageForm,
       strength: strength,
+      diseases: diseases.split(",").map((d) => d.trim().toLowerCase()),
       verificationUrl: verificationUrl,
       qrCodeUrl: qrCodeUrl,
     };
@@ -248,6 +268,7 @@ const ManufacturerDashboard = () => {
       setIngredients("");
       setDosageForm("");
       setStrength("");
+      setDiseases("");
     } catch (error) {
       console.error("Error saving medicine:", error);
       alert(`Failed to save medicine: ${error.message}`);
@@ -258,7 +279,9 @@ const ManufacturerDashboard = () => {
 
     try {
       console.log("🔍 Autofilling details for:", medicineName);
-      const res = await fetch(`/api/medicine/autofill?name=${encodeURIComponent(medicineName)}`);
+      const res = await fetch(
+        `/api/medicine/autofill?name=${encodeURIComponent(medicineName)}`
+      );
       const data = await res.json();
 
       if (data.error) {
@@ -269,6 +292,7 @@ const ManufacturerDashboard = () => {
       setIngredients(data.ingredients || "");
       setDosageForm(data.dosageForm || "");
       setStrength(data.strength || "");
+      setDiseases(data.diseases || "");
 
       console.log("✅ Autofilled:", data);
     } catch (error) {
@@ -282,16 +306,16 @@ const ManufacturerDashboard = () => {
 
       <div className="relative z-10 p-8 md:p-12 w-full max-w-4xl mx-auto h-full flex flex-col items-center justify-center">
         <button
-            onClick={handleLogout}
-            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-          >
-            Logout
-          </button>
+          onClick={handleLogout}
+          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+        >
+          Logout
+        </button>
         <div className="text-center mb-8">
           <h1 className="text-3xl md:text-4xl  font-bold">
             Manufacturer Dashboard
           </h1>
-          
+
           <p className="mt-2 text-gray-400">
             Easily manage your medicine products. Add new items, generate unique
             identifiers, and create QR codes for physical packaging.
@@ -423,6 +447,22 @@ const ManufacturerDashboard = () => {
                   required
                 />
               </div>
+              <div>
+                <label
+                  htmlFor="diseases"
+                  className="block text-sm font-medium text-gray-300 mb-1"
+                >
+                  Diseases/Symptoms (e.g., Cold, Cough, Fever)
+                </label>
+                <input
+                  type="text"
+                  id="diseases"
+                  value={diseases}
+                  onChange={(e) => setDiseases(e.target.value)}
+                  className="w-full px-4 py-2 bg-[#2a2a2a] text-white rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  required
+                />
+              </div>
 
               <button
                 type="submit"
@@ -478,6 +518,11 @@ const ManufacturerDashboard = () => {
                     {medicine.strength && (
                       <p className="text-sm text-gray-400">
                         Strength: {medicine.strength}
+                      </p>
+                    )}
+                    {medicine.diseases && medicine.diseases.length > 0 && (
+                      <p className="text-sm text-gray-400">
+                        Treats: {Array.isArray(medicine.diseases) ? medicine.diseases.join(", ") : medicine.diseases}
                       </p>
                     )}
                     <p className="text-xs text-gray-500 mt-2 break-all">
