@@ -62,8 +62,34 @@ export async function GET(req) {
       });
     }
 
-    // ✅ STEP 3: Nothing found
-    console.log("❌ No matches found for:", query);
+    // ✅ STEP 3: Look for similar medicines (fuzzy matching)
+    console.log("🔍 Looking for similar medicines for:", query);
+
+    try {
+      const similarResponse = await fetch(
+        `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/medicine/similar?query=${encodeURIComponent(query)}&limit=5`
+      );
+
+      if (similarResponse.ok) {
+        const similarData = await similarResponse.json();
+
+        if (similarData.suggestions && similarData.suggestions.length > 0) {
+          console.log(`✅ Found ${similarData.suggestions.length} similar medicines`);
+          return NextResponse.json({
+            authentic: false,
+            type: "similar",
+            query: query,
+            suggestions: similarData.suggestions,
+            message: `No exact match found for "${query}". Here are some similar medicines:`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching similar medicines:", error);
+    }
+
+    // ✅ STEP 4: Nothing found at all
+    console.log("❌ No matches or similar medicines found for:", query);
     return NextResponse.json({
       authentic: false,
       message: "No medicines found for this query.",
