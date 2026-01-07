@@ -1,14 +1,22 @@
 // src/app/api/auth/register/route.js
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import prisma from "@/lib/prisma"; // we’ll create this helper in lib/prisma.js
+
+// Lazy load prisma to avoid build-time database connection issues
+let prisma;
+async function getPrisma() {
+  if (!prisma) {
+    const { default: prismaClient } = await import("@/lib/prisma");
+    prisma = prismaClient;
+  }
+  return prisma;
+}
 
 export async function POST(req) {
   try {
     const body = await req.json();
     const { email, password, role } = body;
 
-    // 1. Basic validation
     if (!email || !password || !role) {
       return NextResponse.json(
         { error: "Email, password, and role are required" },
@@ -16,8 +24,9 @@ export async function POST(req) {
       );
     }
 
-    // 2. Check if user already exists
-    const existingUser = await prisma.user.findUnique({
+    const prismaClient = await getPrisma();
+    
+    const existingUser = await prismaClient.user.findUnique({
       where: { email },
     });
 
@@ -28,11 +37,9 @@ export async function POST(req) {
       );
     }
 
-    // 3. Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 4. Create user in DB
-    const newUser = await prisma.user.create({
+    const newUser = await prismaClient.user.create({
       data: {
         email,
         password: hashedPassword,
@@ -40,7 +47,6 @@ export async function POST(req) {
       },
     });
 
-    // 5. Return success
     return NextResponse.json(
       { message: "User registered successfully", user: { id: newUser.id, email: newUser.email, role: newUser.role } },
       { status: 201 }
