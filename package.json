@@ -16,7 +16,7 @@
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",
     "html5-qrcode": "^2.3.8",
-    "next": "^16.1.1",
+    "next": "15.5.2",
     "next-auth": "^4.24.11",
     "prisma": "^6.15.0",
     "qrcode": "^1.5.4",
@@ -29,7 +29,11 @@
     "@types/node": "^24.3.1",
     "@types/qrcode": "^1.5.5",
     "eslint": "^9",
-    "eslint-config-next": "^16.1.1",
+    "eslint-config-next": "15.5.2",
     "tailwindcss": "^4"
+  },
+  "overrides": {
+    "next-auth": "^4.24.11"
   }
 }
+
