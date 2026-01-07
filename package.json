@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "npx prisma generate"
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -16,7 +16,7 @@
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",
     "html5-qrcode": "^2.3.8",
-    "next": "15.5.9",
+    "next": "15.5.2",
     "next-auth": "^4.24.11",
     "prisma": "^6.15.0",
     "qrcode": "^1.5.4",
@@ -29,10 +29,15 @@
     "@types/node": "^24.3.1",
     "@types/qrcode": "^1.5.5",
     "eslint": "^9",
-    "eslint-config-next": "15.5.9",
+    "eslint-config-next": "15.5.2",
     "tailwindcss": "^4"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   },
   "overrides": {
     "next-auth": "^4.24.11"
   }
 }
+
