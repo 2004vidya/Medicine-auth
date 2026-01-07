@@ -22,6 +22,7 @@ model User {
   password  String?
   role      Role       @default(CUSTOMER)
   medicines Medicine[] @relation("UserMedicines") // 👈 opposite relation
+  flags     MedicineFlag[] // Flags created by this user
   accounts  Account[]
   sessions  Session[]
   createdAt DateTime   @default(now())
@@ -74,6 +75,7 @@ model Medicine {
   master         MedicineMaster? @relation("MasterMedicines", fields: [masterId], references: [id])
   masterId       String?
   diseases       String[]   // ✅ NEW: store multiple related diseases or symptoms
+  flags          MedicineFlag[] // Flags for this medicine
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
@@ -97,4 +99,17 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model MedicineFlag {
+  id             String   @id @default(cuid())
+  medicineId     String
+  customerId     String
+  reason         String?
+  createdAt      DateTime @default(now())
+  
+  medicine       Medicine  @relation(fields: [medicineId], references: [id])
+  customer       User      @relation(fields: [customerId], references: [id])
+
+  @@unique([medicineId, customerId]) // prevents duplicate flag by same customer
 }
