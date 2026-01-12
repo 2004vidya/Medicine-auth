@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(uuid())
+  name      String?
+  email     String?    @unique
+  emailVerified DateTime?
+  image     String?
+  password  String?
+  role      Role       @default(CUSTOMER)
+  medicines Medicine[] @relation("UserMedicines") // 👈 opposite relation
+  flags     MedicineFlag[] // Flags created by this user
+  accounts  Account[]
+  sessions  Session[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model MedicineMaster {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  genericName String?
+  composition String?
+  dosageForm  String?
+  packaging   String?
+  medicines   Medicine[] @relation("MasterMedicines") // 👈 opposite relation
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Medicine {
+  id             String          @id @default(uuid())
+  name           String
+  batchNumber    String
+  expiryDate     DateTime
+  qrCode         String?
+   // New fields
+  ingredients String?
+  dosageForm  String?
+  strength    String?
+  manufacturer   User            @relation("UserMedicines", fields: [manufacturerId], references: [id])
+  manufacturerId String
+  master         MedicineMaster? @relation("MasterMedicines", fields: [masterId], references: [id])
+  masterId       String?
+  diseases       String[]   // ✅ NEW: store multiple related diseases or symptoms
+  flags          MedicineFlag[] // Flags for this medicine
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+enum Role {
+  CUSTOMER
+  MANUFACTURER
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model MedicineFlag {
+  id             String   @id @default(cuid())
+  medicineId     String
+  customerId     String
+  reason         String?
+  createdAt      DateTime @default(now())
+  
+  medicine       Medicine  @relation(fields: [medicineId], references: [id])
+  customer       User      @relation(fields: [customerId], references: [id])
+
+  @@unique([medicineId, customerId]) // prevents duplicate flag by same customer
+}
